@@ -102,7 +102,7 @@ public class RoomHeightmapEventHandler(IRoomRepository roomRepository,
             RoomFurnitureItemHelperService = roomFurnitureItemHelperService
         });
         
-        await client.WriteToStreamAsync(new RoomWallItemsWriter
+        await client.WriteToStreamAsync(new Sadie.Networking.Events.Writers.FixedRoomWallItemsWriter
         {
             FurnitureOwners = wallFurnitureOwners,
             WallItems = wallItems

@@ -28,12 +28,12 @@ public class RoomFurnitureItemHelperService : IRoomFurnitureItemHelperService
             return;
         }
 
-        if (state >= roomFurnitureItem.FurnitureItem.InteractionModes)
-        {
-            state = 0;
-        }
+        // Cycle 0..(modes-1) so state 0 (off/default) is reachable. The original
+        // `(state >= modes ? 0 : state) + 1` produced 1..modes and never returned
+        // to 0, so toggle furni (lamps, gates) could turn on but never off.
+        var nextState = (state + 1) % roomFurnitureItem.FurnitureItem.InteractionModes;
 
-        await UpdateMetaDataForItemAsync(room, roomFurnitureItem, (state + 1).ToString());
+        await UpdateMetaDataForItemAsync(room, roomFurnitureItem, nextState.ToString());
         
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
         
@@ -72,7 +72,7 @@ public class RoomFurnitureItemHelperService : IRoomFurnitureItemHelperService
                 InteractionModes = 1,
                 OwnerId = roomFurnitureItem.PlayerFurnitureItem.PlayerId
             }
-            : new RoomWallFurnitureItemUpdatedWriter
+            : new Sadie.Networking.Events.Writers.FixedRoomWallFurnitureItemUpdatedWriter
         {
             Item = roomFurnitureItem
         };

@@ -68,7 +68,7 @@ public class RoomItemEjectedEventHandler(
         }
         else
         {
-            await room.UserRepository.BroadcastDataAsync(new RoomWallFurnitureItemRemovedWriter
+            await room.UserRepository.BroadcastDataAsync(new Sadie.Networking.Events.Writers.FixedRoomWallFurnitureItemRemovedWriter
             {
                 Item = roomFurnitureItem
             });

@@ -35,6 +35,7 @@ public static class RoomHelpers
             .Include(x => x.Layout)
             .Include(x => x.FurnitureItems)
             .Include(x => x.Owner)
+            .Include(x => x.Settings)
             .Include(x => x.PaintSettings)
             .Include(x => x.ChatSettings)
             .Include(x => x.PlayerLikes)

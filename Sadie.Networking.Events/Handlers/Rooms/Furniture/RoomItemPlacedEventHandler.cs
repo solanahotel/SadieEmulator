@@ -186,7 +186,7 @@ public class RoomItemPlacedEventHandler(
                 await interactor.OnPlaceAsync(client.RoomUser.Room, roomFurnitureItem, client.RoomUser);
             }
         
-            await room.UserRepository.BroadcastDataAsync(new RoomWallFurnitureItemPlacedWriter
+            await room.UserRepository.BroadcastDataAsync(new Sadie.Networking.Events.Writers.FixedRoomWallFurnitureItemPlacedWriter
             {
                 RoomFurnitureItem = roomFurnitureItem
             });

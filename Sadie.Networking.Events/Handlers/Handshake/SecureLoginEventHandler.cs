@@ -129,7 +129,17 @@ public class SecureLoginEventHandler(
         
         playerLogic.Data.IsOnline = true;
         playerLogic.Data.LastOnline = DateTime.Now;
-        
+
+        // Persist online status so the CMS (which reads player_data.is_online) shows
+        // the correct online count. Disconnect already saves IsOnline=false; login
+        // only set it in memory, leaving the DB column stuck at 0.
+        await using (var onlineDbContext = await dbContextFactory.CreateDbContextAsync())
+        {
+            onlineDbContext.Entry(playerLogic.Data).Property(x => x.IsOnline).IsModified = true;
+            onlineDbContext.Entry(playerLogic.Data).Property(x => x.LastOnline).IsModified = true;
+            await onlineDbContext.SaveChangesAsync();
+        }
+
         playerLogic.Authenticated = true;
 
         await NetworkPacketEventHelpers.SendLoginPacketsToPlayerAsync(client, playerLogic);
