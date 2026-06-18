@@ -91,7 +91,7 @@ public static class NetworkPacketEventHelpers
 
         await networkObject.WriteToStreamAsync(new PlayerPermissionsWriter
         {
-            Club = playerSubscriptions.Any(x => x.Subscription.Name == "HABBO_CLUB") ? 2 : 0,
+            Club = playerSubscriptions.Any(x => x.Subscription.Name == "HABBO_CLUB" && x.ExpiresAt > DateTime.Now) ? 2 : 0,
             Rank = player.Roles.Count != 0 ? player.Roles.Max(x => x.Id) : 1,
             Ambassador = true
         });

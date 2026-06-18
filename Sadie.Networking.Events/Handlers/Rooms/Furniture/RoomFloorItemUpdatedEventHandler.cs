@@ -1,3 +1,4 @@
+using System.Drawing;
 using Microsoft.EntityFrameworkCore;
 using Sadie.API.Game.Rooms;
 using Sadie.API.Game.Rooms.Furniture;
@@ -84,8 +85,24 @@ public class RoomFloorItemUpdatedEventHandler(
             CanLay: false
         };
         
-        if (!rotatingSingleTileItem && 
-            !tileMapHelperService.CanPlaceAt(newPoints, room.TileMap, checkPointsForUsers))
+        var othersExcludingThis = room.FurnitureItems.Except([roomFurnitureItem]).ToList();
+
+        bool CanPlaceItemAt(Point p)
+        {
+            var itemsAtPoint = tileMapHelperService.GetItemsForPosition(p.X, p.Y, othersExcludingThis);
+
+            // Empty tile: normal open-tile check. Occupied tile: you may only stack
+            // if the topmost (other) item allows it (canputstuffon / can_stack).
+            if (itemsAtPoint.Count == 0)
+            {
+                return tileMapHelperService.CanPlaceAt([p], room.TileMap, checkPointsForUsers);
+            }
+
+            return itemsAtPoint.MaxBy(f => f.PositionZ)!.FurnitureItem.CanStack &&
+                   (!checkPointsForUsers || !room.TileMap.UsersAtPoint(p));
+        }
+
+        if (!rotatingSingleTileItem && !newPoints.All(CanPlaceItemAt))
         {
             await NetworkPacketEventHelpers.SendFurniturePlacementErrorAsync(client, RoomFurniturePlacementError.CantSetItem);
             return;

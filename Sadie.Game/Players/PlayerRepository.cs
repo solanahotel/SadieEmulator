@@ -35,6 +35,7 @@ public class PlayerRepository(
             .Include(x => x.GameSettings)
             .Include(x => x.NavigatorSettings)
             .Include(x => x.FurnitureItems)
+            .Include(x => x.Subscriptions).ThenInclude(x => x.Subscription)
             .Include(x => x.OutgoingFriendships)
             .Include(x => x.IncomingFriendships)
             .Include(x => x.Rooms)

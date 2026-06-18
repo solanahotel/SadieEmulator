@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Sadie.API;
 using Sadie.Shared;
@@ -10,9 +11,17 @@ namespace Sadie.Console;
 internal static class Program
 {
     private static IServer? _server;
-    
+
     private static async Task Main()
     {
+        // The wire protocol uses '.' as the decimal separator (the client parses
+        // numbers with parseFloat). Force invariant culture so doubles like furniture
+        // Z heights serialize as "0.90" not "0,90" under locales such as nl_NL —
+        // otherwise the client reads "0,90" as 0 and stacked items drop to the floor.
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+
         SetEventHandlers();
 
         var host = Host.CreateDefaultBuilder()

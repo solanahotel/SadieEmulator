@@ -93,7 +93,7 @@ public class CatalogPurchaseEventHandler(
         }
 
         if (catalogItem.RequiresClubMembership &&
-            client.Player?.Subscriptions.FirstOrDefault(x => x.Subscription.Name == "HABBO_CLUB") == null)
+            client.Player?.Subscriptions.FirstOrDefault(x => x.Subscription.Name == "HABBO_CLUB" && x.ExpiresAt > DateTime.Now) == null)
         {
             await client.WriteToStreamAsync(new CatalogPurchaseUnavailableWriter
             {

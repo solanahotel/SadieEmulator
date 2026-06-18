@@ -92,6 +92,11 @@ public static class EventHandlerId
     // Custom (non-Habbo) packet: admin permanent furniture deletion. Client sends
     // header 4001 with the furniture item id; see RoomItemDeleteEventHandler.
     public const short RoomItemDelete = 4001;
+    // Custom (non-Habbo) Solana Club payment packets (client <-> emulator).
+    public const short ClubPaymentIntent = 4002; // client asks for a payment intent (packageId)
+    public const short ClubPaymentSubmit = 4003; // client submits the paid tx signature
+    public const short ClubPaymentIntentResult = 4004; // server -> client: intent (treasury, amount, ref)
+    public const short ClubPaymentResult = 4005;       // server -> client: grant outcome
     public const short RoomFloorFurnitureItemUpdated = 248;
     public const short RoomItemUse = 99;
     // Wall-item "use"/multistate toggle. The Nitro client sends a SEPARATE header

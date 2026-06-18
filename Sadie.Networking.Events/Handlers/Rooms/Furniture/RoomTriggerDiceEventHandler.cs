@@ -19,7 +19,7 @@ public class RoomTriggerDiceEventHandler(IRoomFurnitureItemInteractorRepository 
             .RoomUser
             .Room
             .FurnitureItems
-            .FirstOrDefault(x => x.Id == ItemId);
+            .FirstOrDefault(x => x.PlayerFurnitureItemId == ItemId);
 
         if (roomFurnitureItem == null || roomFurnitureItem.PlayerFurnitureItem!.MetaData == "-1")
         {

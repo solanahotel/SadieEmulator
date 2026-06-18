@@ -72,9 +72,22 @@ public class RoomItemDeleteEventHandler(
 
         room.FurnitureItems.Remove(roomFurnitureItem);
 
-        var point = new Point(roomFurnitureItem.PositionX, roomFurnitureItem.PositionY);
+        List<Point> points = roomFurnitureItem.FurnitureItem.Type == FurnitureItemType.Floor
+            ? tileMapHelperService.GetPointsForPlacement(
+                roomFurnitureItem.PositionX,
+                roomFurnitureItem.PositionY,
+                roomFurnitureItem.FurnitureItem.TileSpanX,
+                roomFurnitureItem.FurnitureItem.TileSpanY,
+                (int) roomFurnitureItem.Direction)
+            : [new Point(roomFurnitureItem.PositionX, roomFurnitureItem.PositionY)];
 
-        foreach (var user in tileMapHelperService.GetUsersAtPoints([point], room.UserRepository.GetAll()))
+        // Refresh the tile map for the freed tiles so the spot is placeable again.
+        if (roomFurnitureItem.FurnitureItem.Type == FurnitureItemType.Floor)
+        {
+            tileMapHelperService.UpdateTileMapsForPoints(points, room.TileMap, room.FurnitureItems);
+        }
+
+        foreach (var user in tileMapHelperService.GetUsersAtPoints(points, room.UserRepository.GetAll()))
         {
             user.CheckStatusForCurrentTile();
         }
