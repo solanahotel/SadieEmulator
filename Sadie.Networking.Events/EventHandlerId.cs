@@ -89,8 +89,15 @@ public static class EventHandlerId
     public const short PlayerInventoryFurnitureItems = 3150;
     public const short RoomItemPlaced = 1258;
     public const short RoomItemEjected = 3456;
+    // Custom (non-Habbo) packet: admin permanent furniture deletion. Client sends
+    // header 4001 with the furniture item id; see RoomItemDeleteEventHandler.
+    public const short RoomItemDelete = 4001;
     public const short RoomFloorFurnitureItemUpdated = 248;
     public const short RoomItemUse = 99;
+    // Wall-item "use"/multistate toggle. The Nitro client sends a SEPARATE header
+    // (FURNITURE_WALL_MULTISTATE = 210) for wall items vs floor items (99), so wall
+    // items need their own handler — see RoomWallItemUseEventHandler.
+    public const short RoomWallItemUse = 210;
     public const short RoomGiveUserRights = 808;
     public const short RoomRemoveUserRights = 2064;
     public const short PlayerWardrobe = 2742;

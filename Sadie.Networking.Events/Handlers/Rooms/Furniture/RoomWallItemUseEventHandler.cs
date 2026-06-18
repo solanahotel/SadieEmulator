@@ -1,0 +1,55 @@
+using Microsoft.EntityFrameworkCore;
+using Sadie.API.Game.Rooms.Furniture;
+using Sadie.API.Networking.Client;
+using Sadie.API.Networking.Events.Handlers;
+using Sadie.Db;
+using Sadie.Networking.Events.Attributes;
+using Sadie.Shared.Attributes;
+
+namespace Sadie.Networking.Events.Handlers.Rooms.Furniture;
+
+// Wall-item use/multistate toggle. The Nitro client sends FURNITURE_WALL_MULTISTATE
+// (header 210) for wall items, distinct from floor items' RoomItemUse (99). Without
+// a handler for 210 the packet was dropped, so wall items with use functions
+// (lamps, torches, fans, etc.) did nothing. Logic mirrors RoomItemUseEventHandler:
+// run any interactor for the item's interaction type, else cycle its state.
+// The composer sends [itemId, state]; we read itemId and the trailing state is
+// ignored (state is recomputed server-side by the cycle), same as the floor path.
+[PacketId(EventHandlerId.RoomWallItemUse)]
+public class RoomWallItemUseEventHandler(
+    IRoomFurnitureItemInteractorRepository interactorRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory,
+    IRoomFurnitureItemHelperService roomFurnitureItemHelperService) : INetworkPacketEventHandler
+{
+    public int ItemId { get; init; }
+
+    [RequiresRoomRights]
+    public async Task HandleAsync(INetworkClient client)
+    {
+        var room = client.RoomUser!.Room;
+
+        var roomFurnitureItem = room
+                .FurnitureItems
+                .FirstOrDefault(x => x.PlayerFurnitureItemId == ItemId);
+
+        if (roomFurnitureItem == null)
+        {
+            return;
+        }
+
+        var interactors = interactorRepository
+            .GetInteractorsForType(roomFurnitureItem.FurnitureItem.InteractionType);
+
+        if (!interactors.Any())
+        {
+            await roomFurnitureItemHelperService.CycleInteractionStateForItemAsync(room, roomFurnitureItem, dbContextFactory);
+        }
+        else
+        {
+            foreach (var interactor in interactors)
+            {
+                await interactor.OnTriggerAsync(room, roomFurnitureItem, client.RoomUser);
+            }
+        }
+    }
+}
