@@ -57,30 +57,41 @@ public class RollerProcessor(IRoomTileMapHelperService tileMapHelperService,
                 .GetAll()
                 .Where(u => !userIdsProcessed.Contains(u.Player.Id));
 
-            var nextStepOpen = room.TileMap.TileExists(nextStep) &&
-                room.TileMap.Map[nextStep.Y, nextStep.X] == (int)RoomTileState.Open &&
-                !room.TileMap.UsersAtPoint(nextStep);
-
-            if (!nextStepOpen)
+            // Can't roll past the edge of the room.
+            if (!room.TileMap.TileExists(nextStep))
             {
                 continue;
             }
-            
-            var rollingUsers = tileMapHelperService.GetUsersAtPoints([rollerPosition], users);
-            
-            foreach (var rollingUser in rollingUsers)
+
+            var nextStepHasUser = room.TileMap.UsersAtPoint(nextStep);
+
+            // Users only roll onto an open, unoccupied tile.
+            if (room.TileMap.Map[nextStep.Y, nextStep.X] == (int)RoomTileState.Open && !nextStepHasUser)
             {
-                await MoveUserOnRollerAsync(
-                    x, 
-                    y, 
-                    nextStep, 
-                    userIdsProcessed, 
-                    rollingUser, 
-                    writers, 
-                    room, 
-                    roller,
-                    nextRoller, 
-                    nextHeight);
+                var rollingUsers = tileMapHelperService.GetUsersAtPoints([rollerPosition], users);
+
+                foreach (var rollingUser in rollingUsers)
+                {
+                    await MoveUserOnRollerAsync(
+                        x,
+                        y,
+                        nextStep,
+                        userIdsProcessed,
+                        rollingUser,
+                        writers,
+                        room,
+                        roller,
+                        nextRoller,
+                        nextHeight);
+                }
+            }
+
+            // A user standing in front blocks items too; otherwise items keep rolling
+            // even onto an occupied tile and STACK on whatever is there (so placing an
+            // item in front of a roller no longer stops the transport).
+            if (nextStepHasUser)
+            {
+                continue;
             }
 
             var unprocessedNonRollers = room.FurnitureItems.Where(i =>
@@ -88,49 +99,55 @@ public class RollerProcessor(IRoomTileMapHelperService tileMapHelperService,
                 FurnitureItemInteractionType.Roller);
 
             var nonRollerItemsOnRoller = tileMapHelperService.GetItemsForPosition(
-                roller.PositionX, 
+                roller.PositionX,
                 roller.PositionY,
                 unprocessedNonRollers);
-            
+
             if (nonRollerItemsOnRoller.Count == 0)
             {
                 continue;
             }
-            
+
             foreach (var item in nonRollerItemsOnRoller)
             {
                 var oldPoints = tileMapHelperService.GetPointsForPlacement(
-                    item.PositionX, 
-                    item.PositionY, 
+                    item.PositionX,
+                    item.PositionY,
                     item.FurnitureItem.TileSpanX,
-                    item.FurnitureItem.TileSpanY, 
+                    item.FurnitureItem.TileSpanY,
                     (int) item.Direction);
-                
+
+                var newPoints = tileMapHelperService.GetPointsForPlacement(
+                    nextStep.X, nextStep.Y,
+                    item.FurnitureItem.TileSpanX,
+                    item.FurnitureItem.TileSpanY,
+                    (int) item.Direction);
+
+                // Land on top of whatever already occupies the destination tile.
+                var landingHeight = tileMapHelperService.GetItemPlacementHeight(
+                    room.TileMap,
+                    newPoints,
+                    room.FurnitureItems.Except([item]).ToList());
+
                 MoveItemOnRoller(
                     nextStep,
                     itemIdsProcessed,
                     writers,
                     item,
                     roller,
-                    nextHeight);
+                    landingHeight);
 
-                tileMapHelperService.UpdateTileMapsForPoints(oldPoints, 
+                tileMapHelperService.UpdateTileMapsForPoints(oldPoints,
                     room.TileMap,
                     room.FurnitureItems);
 
-                var newPoints = tileMapHelperService.GetPointsForPlacement(
-                    nextStep.X, nextStep.Y, 
-                    item.FurnitureItem.TileSpanX,
-                    item.FurnitureItem.TileSpanY, 
-                    (int) item.Direction);
-
-                tileMapHelperService.UpdateTileMapsForPoints(newPoints, 
+                tileMapHelperService.UpdateTileMapsForPoints(newPoints,
                     room.TileMap,
                     room
                         .FurnitureItems
                         .Except([item])
                         .ToList());
-                
+
                 await roomFurnitureItemHelperService.BroadcastItemUpdateToRoomAsync(room, item);
             }
         }

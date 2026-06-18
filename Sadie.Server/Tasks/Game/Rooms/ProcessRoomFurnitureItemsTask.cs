@@ -8,7 +8,8 @@ public class ProcessRoomFurnitureItemsTask(
     IRoomRepository roomRepository, 
     IEnumerable<IRoomFurnitureItemProcessor> processors) : IServerTask
 {
-    public TimeSpan PeriodicInterval => TimeSpan.FromMilliseconds(1000);
+    // Rollers move one tile per cycle. 1333ms = the original 1000ms / 0.75, i.e. 0.75x speed.
+    public TimeSpan PeriodicInterval => TimeSpan.FromMilliseconds(1333);
     public DateTime LastExecuted { get; set; }
     
     public async Task ExecuteAsync()
