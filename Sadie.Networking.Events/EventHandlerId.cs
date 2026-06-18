@@ -78,6 +78,8 @@ public static class EventHandlerId
     public const short CatalogMarketplaceConfig = 2597;
     public const short CatalogRecyclerLogic = 398;
     public const short CatalogGiftConfig = 418;
+    public const short CatalogPurchaseGift = 1411; // buy a catalog item as a gift for another player
+    public const short OpenPresent = 3558;         // open a placed present furni
     public const short RoomUserChangeChatBubble = 1030;
     public const short CatalogDiscount = 223;
     public const short CatalogIndex = 2529;

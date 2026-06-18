@@ -108,6 +108,10 @@ public class RollerProcessor(IRoomTileMapHelperService tileMapHelperService,
                 continue;
             }
 
+            // Bottom of the stack currently on this roller — used to keep stacked items
+            // stacked (each item preserves its height offset above the stack base).
+            var stackBaseZ = nonRollerItemsOnRoller.Min(i => i.PositionZ);
+
             foreach (var item in nonRollerItemsOnRoller)
             {
                 var oldPoints = tileMapHelperService.GetPointsForPlacement(
@@ -123,11 +127,10 @@ public class RollerProcessor(IRoomTileMapHelperService tileMapHelperService,
                     item.FurnitureItem.TileSpanY,
                     (int) item.Direction);
 
-                // Land on top of whatever already occupies the destination tile.
-                var landingHeight = tileMapHelperService.GetItemPlacementHeight(
-                    room.TileMap,
-                    newPoints,
-                    room.FurnitureItems.Except([item]).ToList());
+                // The stack base lands at the destination floor/roller height; items above
+                // keep their relative offset so a stack stays stacked as it rolls (and the
+                // base still ignores any separate item already on the destination tile).
+                var landingHeight = nextHeight + (item.PositionZ - stackBaseZ);
 
                 MoveItemOnRoller(
                     nextStep,
