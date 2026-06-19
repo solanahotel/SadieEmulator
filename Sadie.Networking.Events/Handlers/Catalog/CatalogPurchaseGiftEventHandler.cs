@@ -81,14 +81,25 @@ public class CatalogPurchaseGiftEventHandler(
             return;
         }
 
+        // Persist the buyer's new balance — the charge is otherwise only applied in memory
+        // and was being lost (gift appeared to cost 0).
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE player_data SET credit_balance = {0} WHERE player_id = {1}",
+            client.Player.Data.CreditBalance, client.Player.Id);
+
         var wrappedFurni = catalogItem.FurnitureItems.First();
+
+        // Gift note shown on the placed present (map stuff data the client's present logic reads).
+        var senderFigure = ShowMyFace ? (client.Player.AvatarData?.FigureCode ?? "") : "";
+        var safeMessage = (GiftMessage ?? "").Replace(";", " ").Replace("\n", " ").Replace("\r", " ");
+        var presentMetaData = $"MESSAGE={safeMessage};PURCHASER_NAME={client.Player.Username};PURCHASER_FIGURE={senderFigure}";
 
         var present = new PlayerFurnitureItem
         {
             Player = recipientPlayer,
             FurnitureItem = presentDef,
             LimitedData = "1:1",
-            MetaData = "0",
+            MetaData = presentMetaData,
             CreatedAt = DateTime.Now
         };
 

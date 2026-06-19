@@ -1,6 +1,6 @@
 ﻿using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
-using Sadie.Networking.Writers.Catalog;
+using Sadie.Networking.Events.Writers;
 using Sadie.Shared.Attributes;
 
 namespace Sadie.Networking.Events.Handlers.Catalog;
@@ -15,7 +15,7 @@ public class CatalogGiftConfigEventHandler : INetworkPacketEventHandler
         // no extra paper/colour step — the client shows them and lets the user gift.
         var boxes = new List<int> { 187, 188, 189, 190, 191, 192, 193 };
 
-        await client.WriteToStreamAsync(new CatalogGiftWrappingConfigWriter
+        await client.WriteToStreamAsync(new FixedGiftWrappingConfigWriter
         {
             Enabled = true,
             Price = 0,

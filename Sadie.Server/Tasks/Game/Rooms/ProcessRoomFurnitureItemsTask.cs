@@ -8,8 +8,9 @@ public class ProcessRoomFurnitureItemsTask(
     IRoomRepository roomRepository, 
     IEnumerable<IRoomFurnitureItemProcessor> processors) : IServerTask
 {
-    // Rollers move one tile per cycle. 1333ms = the original 1000ms / 0.75, i.e. 0.75x speed.
-    public TimeSpan PeriodicInterval => TimeSpan.FromMilliseconds(1333);
+    // Rollers move one tile per cycle. Default 1333ms (= 1000/0.75); adjustable at runtime
+    // by the :setspeed command via RollerSpeedConfig.
+    public TimeSpan PeriodicInterval => TimeSpan.FromMilliseconds(Sadie.Networking.Events.Commands.RollerSpeedConfig.CycleMs);
     public DateTime LastExecuted { get; set; }
     
     public async Task ExecuteAsync()

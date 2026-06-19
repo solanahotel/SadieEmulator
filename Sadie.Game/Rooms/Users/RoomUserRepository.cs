@@ -145,8 +145,12 @@ public class RoomUserRepository(ILogger<RoomUserRepository> logger,
         await BroadcastDataAsync(
             new RoomUserDataWriter
             {
+                // Hide :invisible users from the room's user list — also keeps them hidden
+                // from anyone who enters later (this periodic sync feeds new entrants too).
                 Users = _users
                     .Values
+                    .Where(x => !Sadie.Networking.Events.Commands.InvisibleStore.IsInvisible(x.Player.Id))
+                    .ToList()
             });
     }
 

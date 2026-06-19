@@ -82,26 +82,34 @@ public class RoomFurnitureItemHelperService : IRoomFurnitureItemHelperService
 
     public ObjectDataKey GetObjectDataKeyForItem(PlayerFurnitureItemPlacementData furnitureItem)
     {
-        return furnitureItem.FurnitureItem.InteractionType switch
+        if (furnitureItem.FurnitureItem.InteractionType == FurnitureItemInteractionType.RoomAdsBg ||
+            IsPresent(furnitureItem))
         {
-            FurnitureItemInteractionType.RoomAdsBg => ObjectDataKey.MapKey,
-            _ => ObjectDataKey.LegacyKey
-        };
+            return ObjectDataKey.MapKey;
+        }
+
+        return ObjectDataKey.LegacyKey;
     }
 
     public Dictionary<string, string> GetObjectDataForItem(PlayerFurnitureItemPlacementData furnitureItem)
     {
-        if (furnitureItem.FurnitureItem!.InteractionType == FurnitureItemInteractionType.RoomAdsBg)
+        // Presents (gift boxes) carry the gift note as map stuff data: MESSAGE,
+        // PURCHASER_NAME, PURCHASER_FIGURE — the client's present logic reads these.
+        if (furnitureItem.FurnitureItem!.InteractionType == FurnitureItemInteractionType.RoomAdsBg ||
+            IsPresent(furnitureItem))
         {
             var data = new Dictionary<string, string>();
-            
-            foreach (var piece in furnitureItem.PlayerFurnitureItem.MetaData.Split(";"))
-            {
-                var parts = piece.Split("=");
-                var key = parts[0];
-                var value = parts.Length < 2 ? "" : parts[1];
+            var metaData = furnitureItem.PlayerFurnitureItem.MetaData ?? "";
 
-                data[key] = value;
+            foreach (var piece in metaData.Split(";"))
+            {
+                if (string.IsNullOrEmpty(piece))
+                {
+                    continue;
+                }
+
+                var parts = piece.Split('=', 2);
+                data[parts[0]] = parts.Length < 2 ? "" : parts[1];
             }
 
             return data;
@@ -109,4 +117,7 @@ public class RoomFurnitureItemHelperService : IRoomFurnitureItemHelperService
 
         return new Dictionary<string, string>();
     }
+
+    private static bool IsPresent(PlayerFurnitureItemPlacementData furnitureItem) =>
+        furnitureItem.FurnitureItem?.AssetName?.StartsWith("present_") == true;
 }

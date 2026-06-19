@@ -183,11 +183,19 @@ public static class NetworkPacketEventHelpers
         IRoomChatCommandRepository commandRepository,
         INetworkClient client)
     {
-        var commands = commandRepository.GetRegisteredCommands();
-            
+        var player = client.Player;
+
+        // Only list commands the player is actually allowed to use, so staff see staff
+        // commands and admins see staff + admin commands; everyone else sees the basics.
+        var commands = commandRepository.GetRegisteredCommands()
+            .Where(c => player != null && c.PermissionsRequired.All(player.HasPermission))
+            .OrderBy(c => c.Trigger)
+            .ToList();
+
         await client.WriteToStreamAsync(new PlayerAlertWriter
         {
-            Message = string.Join(Environment.NewLine, commands.Select(BuildCommandLine))
+            Message = "Available commands:" + Environment.NewLine +
+                      string.Join(Environment.NewLine, commands.Select(BuildCommandLine))
         });
     }
 
@@ -239,7 +247,13 @@ public static class NetworkPacketEventHelpers
         {
             return;
         }
-        
+
+        // Muted by :mute / :room mute — silently drop the chat (commands above still work).
+        if (Commands.ChatMuteStore.IsMuted(room.Id, roomUser.Player.Id))
+        {
+            return;
+        }
+
         var chatMessage = new RoomChatMessage()
         {
             RoomId = room.Id,

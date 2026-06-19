@@ -68,13 +68,22 @@ public class RoomItemPlacedEventHandler(
         if (playerItem.FurnitureItem.Type == FurnitureItemType.Floor)
         {
             if (!int.TryParse(placementData[1], out var x) ||
-                !int.TryParse(placementData[2], out var y) || 
+                !int.TryParse(placementData[2], out var y) ||
                 !int.TryParse(placementData[3], out var direction))
             {
                 await NetworkPacketEventHelpers.SendFurniturePlacementErrorAsync(client, RoomFurniturePlacementError.CantSetItem);
                 return;
             }
-            
+
+            // Teleports only have sprites for directions 2 and 4 (they're doors); placing
+            // one at any other direction draws nothing — the item is there but invisible.
+            // Snap to the nearest supported direction so it always renders.
+            if (playerItem.FurnitureItem.InteractionType == FurnitureItemInteractionType.Teleport &&
+                direction != 2 && direction != 4)
+            {
+                direction = direction < 4 ? 2 : 4;
+            }
+
             var pointsForPlacement = tileMapHelperService.GetPointsForPlacement(x, y, playerItem.FurnitureItem.TileSpanX,
                 playerItem.FurnitureItem.TileSpanY, direction);
 
