@@ -33,6 +33,22 @@ public static class InvisibleStore
     }
 }
 
+// Global timed chat mutes (set by the mod-tool Mute sanction, checked in OnChatMessageAsync).
+public static class GlobalMuteStore
+{
+    private static readonly ConcurrentDictionary<long, DateTime> MutedUntil = new();
+
+    public static void Mute(long playerId, TimeSpan duration) => MutedUntil[playerId] = DateTime.Now.Add(duration);
+    public static void Unmute(long playerId) => MutedUntil.TryRemove(playerId, out _);
+
+    public static bool IsMuted(long playerId)
+    {
+        if (!MutedUntil.TryGetValue(playerId, out var until)) return false;
+        if (DateTime.Now >= until) { MutedUntil.TryRemove(playerId, out _); return false; }
+        return true;
+    }
+}
+
 // Roller / furniture-processing cycle length in ms (set by :setspeed, read by the task).
 public static class RollerSpeedConfig
 {

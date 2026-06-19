@@ -125,7 +125,7 @@ public static class NetworkPacketEventHelpers
         {
             await networkObject.WriteToStreamAsync(new ModToolsWriter
             {
-                Issues = [],
+                Issues = Moderation.CfhIssueStore.GetAll().Select(x => x.ToIssueData()).ToList(),
                 MessageTemplates = [],
                 Unknown3 = 0,
                 CallForHelpPermission = true,
@@ -248,8 +248,10 @@ public static class NetworkPacketEventHelpers
             return;
         }
 
-        // Muted by :mute / :room mute — silently drop the chat (commands above still work).
-        if (Commands.ChatMuteStore.IsMuted(room.Id, roomUser.Player.Id))
+        // Muted by :mute / :room mute, or globally by the mod-tool Mute sanction — silently
+        // drop the chat (commands above still work).
+        if (Commands.ChatMuteStore.IsMuted(room.Id, roomUser.Player.Id) ||
+            Commands.GlobalMuteStore.IsMuted(roomUser.Player.Id))
         {
             return;
         }
