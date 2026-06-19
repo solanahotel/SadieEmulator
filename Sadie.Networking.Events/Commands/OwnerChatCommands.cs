@@ -22,6 +22,12 @@ internal static class FurnitureEjectHelper
         IRoomTileMapHelperService tileMapHelperService,
         IDbContextFactory<SadieDbContext> dbContextFactory)
     {
+        if (!user.HasRights())
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "You need room rights to use this." });
+            return;
+        }
+
         var room = user.Room;
 
         if (items.Count == 0)
@@ -71,7 +77,7 @@ public class PickAllChatCommand(
     public string Trigger => "pickall";
     public string Description => "Pick up all of your furniture in this room";
     public List<string> PermissionsRequired { get; set; } = [];
-    public bool BypassPermissionCheckIfRoomOwner => true;
+    public bool BypassPermissionCheckIfRoomOwner => false;
     public List<string> Parameters => [];
 
     public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
@@ -91,7 +97,7 @@ public class EjectAllChatCommand(
     public string Trigger => "ejectall";
     public string Description => "Send all furniture in this room back to inventory";
     public List<string> PermissionsRequired { get; set; } = [];
-    public bool BypassPermissionCheckIfRoomOwner => true;
+    public bool BypassPermissionCheckIfRoomOwner => false;
     public List<string> Parameters => [];
 
     public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
@@ -109,11 +115,17 @@ public class MuteChatCommand(IPlayerRepository playerRepository) : IRoomChatComm
     public string Trigger => "mute";
     public string Description => "Mute a user in this room";
     public List<string> PermissionsRequired { get; set; } = [];
-    public bool BypassPermissionCheckIfRoomOwner => true;
+    public bool BypassPermissionCheckIfRoomOwner => false;
     public List<string> Parameters => ["username"];
 
     public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
     {
+        if (!user.HasRights())
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "You need room rights to use this." });
+            return;
+        }
+
         if (!reader.GetWord(out var username) || string.IsNullOrWhiteSpace(username))
         {
             await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "Usage: :mute [username]" });
@@ -137,11 +149,17 @@ public class UnmuteChatCommand(IPlayerRepository playerRepository) : IRoomChatCo
     public string Trigger => "unmute";
     public string Description => "Unmute a user in this room";
     public List<string> PermissionsRequired { get; set; } = [];
-    public bool BypassPermissionCheckIfRoomOwner => true;
+    public bool BypassPermissionCheckIfRoomOwner => false;
     public List<string> Parameters => ["username"];
 
     public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
     {
+        if (!user.HasRights())
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "You need room rights to use this." });
+            return;
+        }
+
         if (!reader.GetWord(out var username) || string.IsNullOrWhiteSpace(username))
         {
             await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "Usage: :unmute [username]" });
@@ -165,11 +183,17 @@ public class RoomControlChatCommand : IRoomChatCommand
     public string Trigger => "room";
     public string Description => "Mute or unmute the whole room";
     public List<string> PermissionsRequired { get; set; } = [];
-    public bool BypassPermissionCheckIfRoomOwner => true;
+    public bool BypassPermissionCheckIfRoomOwner => false;
     public List<string> Parameters => ["mute|unmute"];
 
     public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
     {
+        if (!user.HasRights())
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "You need room rights to use this." });
+            return;
+        }
+
         reader.GetWord(out var sub);
 
         switch ((sub ?? "").ToLower())
