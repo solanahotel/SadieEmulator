@@ -4,6 +4,7 @@ using Sadie.API.Game.Rooms.Chat.Commands;
 using Sadie.API.Game.Rooms.Users;
 using Sadie.Db;
 using Sadie.Enums.Game.Players;
+using Sadie.Networking.Events.Effects;
 using Sadie.Networking.Writers.Players;
 using Sadie.Networking.Writers.Rooms.Users;
 
@@ -96,5 +97,46 @@ public class MimicChatCommand(
 
         await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerChangedAppearanceWriter { FigureCode = figure, Gender = genderCode });
         await user.Room.UserRepository.BroadcastDataAsync(new RoomUserDataWriter { Users = [user] });
+    }
+}
+
+// Grant an avatar effect (from the effects catalog) to a player's Effects inventory.
+public class GiveEffectChatCommand(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : IRoomChatCommand
+{
+    public string Trigger => "giveeffect";
+    public string Description => "Give a user an avatar effect they can equip from Effects";
+    public List<string> PermissionsRequired { get; set; } = ["admin"];
+    public bool BypassPermissionCheckIfRoomOwner => false;
+    public List<string> Parameters => ["username", "effect id", "quantity (optional)"];
+
+    public async Task ExecuteAsync(IRoomUser user, IRoomChatCommandParameterReader reader)
+    {
+        if (!reader.GetWord(out var username) || !reader.GetInt(out var effectId))
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = "Usage: :giveeffect [username] [effect id] [quantity]" });
+            return;
+        }
+
+        var quantity = reader.GetInt(out var q) && q > 0 ? q : 1;
+
+        var targetId = playerRepository.GetPlayerLogicByUsername(username!)?.Id
+                       ?? (await playerRepository.GetPlayerByUsernameAsync(username!))?.Id;
+
+        if (targetId == null)
+        {
+            await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter { Message = $"{username} not found." });
+            return;
+        }
+
+        var granted = await EffectService.GrantAsync(dbContextFactory, targetId.Value, effectId, quantity);
+
+        await user.Player.NetworkObject!.WriteToStreamAsync(new PlayerAlertWriter
+        {
+            Message = granted
+                ? $"Gave effect #{effectId} x{quantity} to {username}. They can equip it from Effects (reopen the window)."
+                : $"Effect #{effectId} is not a known effect."
+        });
     }
 }

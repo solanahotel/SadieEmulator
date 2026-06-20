@@ -9,6 +9,7 @@ namespace Sadie.Networking.Events.Moderation;
 public class CfhIssue
 {
     public int IssueId { get; init; }
+    public int DbId { get; set; } // row id in cfh_tickets, for the durable audit trail
     public int State { get; set; } = 1; // 1 = open, 2 = picked
     public int ReportedCategoryId { get; init; }
     public DateTime CreatedAt { get; init; }
@@ -73,4 +74,17 @@ public static class CfhIssueStore
     public static bool TryGet(int id, out CfhIssue issue) => Issues.TryGetValue(id, out issue!);
     public static void Remove(int id) => Issues.TryRemove(id, out _);
     public static IReadOnlyCollection<CfhIssue> GetAll() => Issues.Values.ToList();
+
+    // The cfh_tickets row id of the ticket a moderator is currently handling (picked, not yet
+    // released/closed), or null. Used to stamp the originating ticket onto sanctions they issue
+    // while holding it. Most-recently-picked wins if somehow holding more than one.
+    public static int? GetActiveTicketDbIdForMod(long modId)
+    {
+        var issue = Issues.Values
+            .Where(x => x.State == 2 && x.PickerUserId == (int) modId && x.DbId > 0)
+            .OrderByDescending(x => x.IssueId)
+            .FirstOrDefault();
+
+        return issue?.DbId;
+    }
 }

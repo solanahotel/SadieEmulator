@@ -5,6 +5,7 @@ using Sadie.API.Networking;
 using Sadie.Db;
 using Sadie.Db.Models.Server;
 using Sadie.Networking.Events;
+using Sadie.Networking.Events.Economy;
 using Sadie.Networking.Writers.Players.Purse;
 
 namespace SadieEmulator.Tasks.Game.Players;
@@ -77,20 +78,20 @@ public class PlayerCurrencyRewardsTask(
         await dbContext.SaveChangesAsync();
     }
 
-    private static async Task RewardPlayerAsync(IPlayerLogic player, ServerPeriodicCurrencyReward reward)
+    private async Task RewardPlayerAsync(IPlayerLogic player, ServerPeriodicCurrencyReward reward)
     {
+        if (reward.Type == "credits")
+        {
+            // Persist via the shared currency service. Previously this only changed the in-memory
+            // balance (and told the client), so periodic credits were lost on relog ("reset").
+            await CurrencyService.GiveCreditsAsync(playerRepository, dbContextFactory, player.Id, reward.Amount);
+            return;
+        }
+
         AbstractPacketWriter? writer = null;
-        
+
         switch (reward.Type)
         {
-            case "credits":
-                player.Data.CreditBalance += reward.Amount;
-                
-                writer = new PlayerCreditsBalanceWriter
-                {
-                    Credits = player.Data.CreditBalance
-                };
-                break;
             case "pixels":
                 player.Data.PixelBalance += reward.Amount;
                 

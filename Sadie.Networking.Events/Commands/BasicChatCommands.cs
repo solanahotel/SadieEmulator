@@ -71,6 +71,7 @@ public class EnableChatCommand : IRoomChatCommand
             return;
         }
 
+        // Setting ActiveEffectId (not a tile effect) makes it survive walking — RoomUser preserves it.
         user.ActiveEffectId = effectId;
 
         await user.Room.UserRepository.BroadcastDataAsync(new RoomUserEffectWriter

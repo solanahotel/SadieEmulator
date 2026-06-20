@@ -5,6 +5,7 @@ using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
 using Sadie.Db;
 using Sadie.Networking.Events.Commands;
+using Sadie.Networking.Events.Moderation;
 using Sadie.Networking.Writers.Players;
 using Sadie.Shared.Attributes;
 
@@ -17,7 +18,7 @@ namespace Sadie.Networking.Events.Handlers.Moderation;
 internal static class SanctionHelpers
 {
     public static bool IsMod(INetworkClient client) =>
-        client.Player != null && client.Player.HasPermission("moderator");
+        client.Player != null && client.Player.HasPermission("admin");
 
     public static async Task AlertAsync(IPlayerLogic? target, string message)
     {
@@ -66,9 +67,12 @@ public class ModMessageEventHandler(IPlayerRepository playerRepository) : INetwo
     }
 }
 
-// Default sanction (DEFAULT_SANCTION = 1681): wire is userId, topicIndex, message.
+// Default sanction (DEFAULT_SANCTION = 1681): wire is userId, topicIndex, message. Recorded as a
+// caution in the player's sanction history.
 [PacketId(1681)]
-public class DefaultSanctionEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class DefaultSanctionEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public int UserId { get; set; }
     public int TopicIndex { get; set; }
@@ -76,14 +80,21 @@ public class DefaultSanctionEventHandler(IPlayerRepository playerRepository) : I
 
     public async Task HandleAsync(INetworkClient client)
     {
-        if (!SanctionHelpers.IsMod(client)) return;
+        if (!SanctionHelpers.IsMod(client) || client.Player == null) return;
+
+        await SanctionPersistence.LogAsync(dbContextFactory, client.Player.Id, UserId,
+            SanctionPersistence.TypeCaution, Message, null,
+            CfhIssueStore.GetActiveTicketDbIdForMod(client.Player.Id));
+
         await SanctionHelpers.AlertAsync(playerRepository.GetPlayerLogicById(UserId), Message);
     }
 }
 
 // Mute 1h (MODTOOL_SANCTION_MUTE = 1945): global timed chat mute (duration is fixed by the action).
 [PacketId(1945)]
-public class ModMuteEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class ModMuteEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public int UserId { get; set; }
     public string Message { get; set; } = "";
@@ -91,9 +102,15 @@ public class ModMuteEventHandler(IPlayerRepository playerRepository) : INetworkP
 
     public async Task HandleAsync(INetworkClient client)
     {
-        if (!SanctionHelpers.IsMod(client)) return;
+        if (!SanctionHelpers.IsMod(client) || client.Player == null) return;
 
-        GlobalMuteStore.Mute(UserId, TimeSpan.FromHours(1));
+        var duration = TimeSpan.FromHours(1);
+        GlobalMuteStore.Mute(UserId, duration);
+
+        await SanctionPersistence.LogAsync(dbContextFactory, client.Player.Id, UserId,
+            SanctionPersistence.TypeMute, Message, DateTime.Now.Add(duration),
+            CfhIssueStore.GetActiveTicketDbIdForMod(client.Player.Id));
+
         await SanctionHelpers.AlertAsync(playerRepository.GetPlayerLogicById(UserId),
             string.IsNullOrWhiteSpace(Message) ? "You have been muted for 1 hour." : Message);
     }
@@ -116,6 +133,36 @@ public class ModKickEventHandler(IPlayerRepository playerRepository, IRoomReposi
 
         await SanctionHelpers.AlertAsync(target, Message);
         await SanctionHelpers.BootAsync(roomRepository, target);
+    }
+}
+
+// Trading lock (MODTOOL_SANCTION_TRADELOCK = 3742): wire is userId, message, numSeconds, topicId.
+// The client computes numSeconds as actionLengthHours * 60, i.e. it is really the lock length in
+// MINUTES (hours*60). Enforced in RoomUserTradeEventHandler via TradeLockStore.
+[PacketId(3742)]
+public class ModTradeLockEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
+{
+    public int UserId { get; set; }
+    public string Message { get; set; } = "";
+    public int NumSeconds { get; set; }
+    public int CfhTopicId { get; set; }
+
+    public async Task HandleAsync(INetworkClient client)
+    {
+        if (!SanctionHelpers.IsMod(client) || client.Player == null) return;
+
+        var minutes = NumSeconds > 0 ? NumSeconds : 24 * 60;
+        var duration = TimeSpan.FromMinutes(minutes);
+        TradeLockStore.Lock(UserId, duration);
+
+        await SanctionPersistence.LogAsync(dbContextFactory, client.Player.Id, UserId,
+            SanctionPersistence.TypeTradeLock, Message, DateTime.Now.Add(duration),
+            CfhIssueStore.GetActiveTicketDbIdForMod(client.Player.Id));
+
+        await SanctionHelpers.AlertAsync(playerRepository.GetPlayerLogicById(UserId),
+            string.IsNullOrWhiteSpace(Message) ? "You have been locked out of trading." : Message);
     }
 }
 
@@ -150,21 +197,16 @@ public class ModBanEventHandler(
         var hours = MapBanHours(SanctionIndex);
         var reason = string.IsNullOrWhiteSpace(Message) ? "Banned via mod tool" : Message;
         var now = DateTime.Now;
+        // Link the ban to the CFH ticket the mod is handling, if any.
+        var ticketId = CfhIssueStore.GetActiveTicketDbIdForMod(client.Player.Id);
 
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-        if (hours.HasValue)
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(
-                "INSERT INTO player_bans (creator_id, player_id, reason, created_at, expires_at) VALUES ({0}, {1}, {2}, {3}, {4})",
-                client.Player.Id, UserId, reason, now, now.AddHours(hours.Value));
-        }
-        else
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(
-                "INSERT INTO player_bans (creator_id, player_id, reason, created_at, expires_at) VALUES ({0}, {1}, {2}, {3}, NULL)",
-                client.Player.Id, UserId, reason, now);
-        }
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "INSERT INTO player_bans (creator_id, player_id, reason, created_at, expires_at, ticket_id) VALUES ({0}, {1}, {2}, {3}, {4}, {5})",
+            client.Player.Id, UserId, reason, now,
+            hours.HasValue ? now.AddHours(hours.Value) : DBNull.Value,
+            ticketId.HasValue ? ticketId.Value : DBNull.Value);
 
         // Boot them now; the login check (SecureLoginEventHandler) blocks re-entry.
         var target = playerRepository.GetPlayerLogicById(UserId);

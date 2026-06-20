@@ -50,6 +50,10 @@ public class RoomUser(
     public IRoomUserTrade? Trade { get; set; }
     public int TradeStatus { get; set; }
     public int ActiveEffectId { get; set; }
+    // Tracks tile-sourced effects so a player's chosen effect (set via inventory / :enable) survives
+    // walking: tile effects temporarily override the chosen one and it is restored on stepping off.
+    private int _chosenEffectId;
+    private bool _onTileEffect;
     public IRoomLogic Room { get; } = room;
     public RoomControllerLevel ControllerLevel { get; set; } = controllerLevel;
     public INetworkObject NetworkObject { get; } = networkObject;
@@ -137,15 +141,31 @@ public class RoomUser(
             NextPoint.Value : 
             Point;
         
-        if (room.TileMap.EffectMap[effectPointToCheck.Y, effectPointToCheck.X] != 0)
+        var tileEffect = room.TileMap.EffectMap[effectPointToCheck.Y, effectPointToCheck.X];
+
+        if (tileEffect != 0)
         {
-            var effectId = room.TileMap.EffectMap[Point.Y, Point.X];
-            await SetEffectAsync((RoomUserEffect) effectId);
+            // Stepping onto a tile effect: remember the chosen effect, then show the tile effect.
+            if (!_onTileEffect) _chosenEffectId = ActiveEffectId;
+            _onTileEffect = true;
+
+            if (ActiveEffectId != tileEffect)
+            {
+                await SetEffectAsync((RoomUserEffect) tileEffect);
+            }
         }
-        else if (ActiveEffectId != 0)
+        else if (_onTileEffect)
         {
-            await SetEffectAsync(0);
+            // Stepped off a tile effect: restore the player's chosen effect (0 if none).
+            _onTileEffect = false;
+
+            if (ActiveEffectId != _chosenEffectId)
+            {
+                await SetEffectAsync((RoomUserEffect) _chosenEffectId);
+            }
         }
+        // Otherwise (no tile effect, not coming off one) leave ActiveEffectId alone so a chosen
+        // effect persists while walking.
     }
 
     private async Task UpdateIdleStatusAsync()

@@ -5,6 +5,7 @@ using Sadie.API.Networking.Events.Handlers;
 using Sadie.Db;
 using Sadie.Db.Models.Constants;
 using Sadie.Db.Models.Rooms;
+using Sadie.Enums.Game.Players;
 using Sadie.Enums.Game.Rooms;
 using Sadie.Networking.Writers.Rooms;
 using Sadie.Shared.Attributes;
@@ -51,7 +52,9 @@ public class RoomSettingsSaveEventHandler(
             return;
         }
 
-        if (room.OwnerId != client.Player!.Id)
+        // The owner OR an admin (any-room-rights) may change room settings. The admin's access is global
+        // (not a per-room right), so the owner can neither see nor revoke it.
+        if (room.OwnerId != client.Player!.Id && !client.Player.HasPermission(PlayerPermissionName.AnyRoomRights))
         {
             return;
         }
@@ -103,6 +106,11 @@ public class RoomSettingsSaveEventHandler(
         }
         
         UpdateSettings(room.Settings);
+
+        // "Hide room walls" is a Solana Club feature — non-members can't enable it.
+        var isClubMember = client.Player.Subscriptions.Any(x => x.ExpiresAt > DateTime.Now);
+        if (!isClubMember) room.Settings.HideWalls = false;
+
         UpdateChatSettings(room.ChatSettings);
         
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -141,7 +149,8 @@ public class RoomSettingsSaveEventHandler(
         chatSettings.ChatWeight = ChatWeight;
         chatSettings.ChatSpeed = ChatSpeed;
         chatSettings.ChatDistance = ChatDistance;
-        chatSettings.ChatProtection = ChatProtection;
+        // Every room always uses Standard (Normal) anti-flood protection — not player-configurable.
+        chatSettings.ChatProtection = 1;
     }
     private async Task BroadcastUpdatesAsync(IRoomLogic room)
     {

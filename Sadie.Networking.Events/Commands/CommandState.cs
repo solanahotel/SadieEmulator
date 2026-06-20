@@ -49,6 +49,31 @@ public static class GlobalMuteStore
     }
 }
 
+// Global timed trade locks (set by the mod-tool Trading Lock sanction, checked when a trade
+// is opened in RoomUserTradeEventHandler). Same shape as GlobalMuteStore.
+public static class TradeLockStore
+{
+    private static readonly ConcurrentDictionary<long, DateTime> LockedUntil = new();
+
+    public static void Lock(long playerId, TimeSpan duration) => LockedUntil[playerId] = DateTime.Now.Add(duration);
+    public static void Unlock(long playerId) => LockedUntil.TryRemove(playerId, out _);
+
+    public static bool IsLocked(long playerId)
+    {
+        if (!LockedUntil.TryGetValue(playerId, out var until)) return false;
+        if (DateTime.Now >= until) { LockedUntil.TryRemove(playerId, out _); return false; }
+        return true;
+    }
+
+    // Expiry of an active lock, or null if the player isn't currently trade-locked.
+    public static DateTime? TryGetExpiry(long playerId)
+    {
+        if (!LockedUntil.TryGetValue(playerId, out var until)) return null;
+        if (DateTime.Now >= until) { LockedUntil.TryRemove(playerId, out _); return null; }
+        return until;
+    }
+}
+
 // Roller / furniture-processing cycle length in ms (set by :setspeed, read by the task).
 public static class RollerSpeedConfig
 {

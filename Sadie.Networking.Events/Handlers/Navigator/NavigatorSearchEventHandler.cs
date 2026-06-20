@@ -6,6 +6,7 @@ using Sadie.API.Networking.Events.Handlers;
 using Sadie.Db;
 using Sadie.Db.Models.Navigator;
 using Sadie.Db.Models.Rooms;
+using Sadie.Enums.Game.Players;
 using Sadie.Networking.Writers.Navigator;
 using Sadie.Shared.Attributes;
 
@@ -64,6 +65,25 @@ public class NavigatorSearchEventHandler(
             }
         }
         
+        // "Invisible in navigator" (access_type 3): hide those rooms from normal players. Admins
+        // (any-room-rights) see every room regardless, and owners always see their own.
+        if (!client.Player.HasPermission(PlayerPermissionName.AnyRoomRights))
+        {
+            var invisibleIds = (await dbContext.Database
+                .SqlQueryRaw<long>("SELECT room_id AS Value FROM room_settings WHERE access_type = 3")
+                .ToListAsync()).ToHashSet();
+
+            if (invisibleIds.Count > 0)
+            {
+                foreach (var key in categoryRoomMap.Keys.ToList())
+                {
+                    categoryRoomMap[key] = categoryRoomMap[key]
+                        .Where(r => !invisibleIds.Contains(r.Id) || r.OwnerId == client.Player.Id)
+                        .ToList();
+                }
+            }
+        }
+
         var searchResultPagesWriter = new NavigatorSearchResultPagesWriter
         {
             TabName = TabName,

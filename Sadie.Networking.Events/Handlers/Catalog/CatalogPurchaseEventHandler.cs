@@ -14,6 +14,7 @@ using Sadie.Db.Models.Players.Furniture;
 using Sadie.Enums.Game.Catalog;
 using Sadie.Enums.Game.Furniture;
 using Sadie.Enums.Game.Players;
+using Sadie.Networking.Events.Economy;
 using Sadie.Networking.Writers.Catalog;
 using Sadie.Networking.Writers.Players;
 using Sadie.Networking.Writers.Players.Inventory;
@@ -107,6 +108,9 @@ public class CatalogPurchaseEventHandler(
         {
             return;
         }
+
+        // Daily quest: bought an item from a shop. Non-fatal.
+        try { await QuestService.AddProgressAsync(dbContextFactory, client.Player.Id, "buy_item", 1); } catch { /* ignore */ }
 
         if (page.Layout == CatalogPageLayout.Bots && 
             catalogItem.Name.Contains("bot_") &&

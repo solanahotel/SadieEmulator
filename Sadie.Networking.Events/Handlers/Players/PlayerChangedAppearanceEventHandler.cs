@@ -4,6 +4,7 @@ using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
 using Sadie.Db;
 using Sadie.Enums.Game.Players;
+using Sadie.Networking.Events.Achievements;
 using Sadie.Networking.Writers.Players;
 using Sadie.Networking.Writers.Rooms.Users;
 using Sadie.Shared.Attributes;
@@ -43,9 +44,13 @@ public class PlayerChangedAppearanceEventHandler(
 
         player.AvatarData.FigureCode = figureCode;
         dbContext.Entry(player.AvatarData).Property(x => x.FigureCode).IsModified = true;
-        
+
+        // Achievement: customising your look (granted regardless of whether they're in a room).
+        try { await AchievementService.AddProgressAsync(dbContextFactory, player, "AvatarLooks", 1); } catch { /* non-fatal */ }
+
         if (!NetworkPacketEventHelpers.TryResolveRoomObjectsForClient(roomRepository, client, out var room, out var roomUser))
         {
+            await dbContext.SaveChangesAsync();
             return;
         }
         

@@ -13,7 +13,7 @@ public class ModToolGetRoomInfoEventHandler : INetworkPacketEventHandler
     {
         if (client.Player == null || 
             client.RoomUser == null || 
-            !client.Player.HasPermission(PlayerPermissionName.Moderator))
+            !client.Player.HasPermission("admin"))
         {
             return;
         }

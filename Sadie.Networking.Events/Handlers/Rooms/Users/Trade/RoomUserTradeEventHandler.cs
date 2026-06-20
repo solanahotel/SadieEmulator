@@ -4,6 +4,7 @@ using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
 using Sadie.Enums.Game.Rooms;
 using Sadie.Enums.Game.Rooms.Users.Trading;
+using Sadie.Networking.Events.Commands;
 using Sadie.Networking.Writers.Rooms.Users.Trading;
 using Sadie.Shared.Attributes;
 
@@ -28,10 +29,23 @@ public class RoomUserTradeEventHandler(
             return;
         }
 
-        if ((room.Settings.TradeOption == RoomTradeOption.RequiresRights && !roomUser.HasRights()) || 
+        if ((room.Settings.TradeOption == RoomTradeOption.RequiresRights && !roomUser.HasRights()) ||
             room.Settings.TradeOption != RoomTradeOption.Allowed)
         {
             await client.WriteToStreamAsync(new RoomUserTradeErrorWriter { Code = RoomUserTradeError.RoomTradingNotAllowed });
+            return;
+        }
+
+        // Mod-tool Trading Lock sanction: a locked initiator (or target) can't trade.
+        if (TradeLockStore.IsLocked(roomUser.Player.Id))
+        {
+            await client.WriteToStreamAsync(new RoomUserTradeErrorWriter { Code = RoomUserTradeError.SelfTradingDisabled });
+            return;
+        }
+
+        if (TradeLockStore.IsLocked(targetUser.Player.Id))
+        {
+            await client.WriteToStreamAsync(new RoomUserTradeErrorWriter { Code = RoomUserTradeError.TargetTradingDisabled });
             return;
         }
 

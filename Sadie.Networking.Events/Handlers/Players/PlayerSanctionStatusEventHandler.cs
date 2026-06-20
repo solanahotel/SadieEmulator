@@ -1,5 +1,6 @@
 ﻿using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
+using Sadie.Networking.Events.Commands;
 using Sadie.Networking.Writers.Players;
 using Sadie.Shared.Attributes;
 
@@ -10,6 +11,10 @@ public class PlayerSanctionStatusEventHandler : INetworkPacketEventHandler
 {
     public async Task HandleAsync(INetworkClient client)
     {
+        var playerId = client.Player?.Id ?? 0;
+
+        // Reflect the live mod-tool sanctions: a mute or trade lock shows up in the player's own
+        // sanction-status panel. The writer renders TradeLockedUntil == MinValue as an empty string.
         await client.WriteToStreamAsync(new PlayerSanctionStatusWriter
         {
             HasPreviousSanction = false,
@@ -23,8 +28,8 @@ public class PlayerSanctionStatusEventHandler : INetworkPacketEventHandler
             NextSanctionType = "ALERT",
             HoursForNextSanction = 0,
             Unknown3 = 30,
-            Muted = false,
-            TradeLockedUntil = DateTime.MinValue
+            Muted = GlobalMuteStore.IsMuted(playerId),
+            TradeLockedUntil = TradeLockStore.TryGetExpiry(playerId) ?? DateTime.MinValue
         });
     }
 }

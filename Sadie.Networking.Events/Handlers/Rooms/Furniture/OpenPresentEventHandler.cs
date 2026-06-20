@@ -51,7 +51,25 @@ public class OpenPresentEventHandler(
             return;
         }
 
-        var wrappedDef = await dbContext.Set<FurnitureItem>().FirstOrDefaultAsync(x => x.Id == baseIds[0]);
+        var wrappedId = baseIds[0];
+
+        // Rare Box: roll one of the configured pool items at open time (each equally likely), so the
+        // owner's Housekeeping changes apply to every box. The granted item is a normal tradeable rare.
+        if (present.FurnitureItem.AssetName == "rare_box")
+        {
+            var pool = await dbContext.Database
+                .SqlQueryRaw<long>("SELECT furniture_item_id AS Value FROM rare_box_items")
+                .ToListAsync();
+            if (pool.Count == 0)
+            {
+                pool = await dbContext.Database
+                    .SqlQueryRaw<long>("SELECT id AS Value FROM furniture_items WHERE marketable = 1 AND rarity = 'rare' ORDER BY RAND() LIMIT 1")
+                    .ToListAsync();
+            }
+            if (pool.Count > 0) wrappedId = pool[Random.Shared.Next(pool.Count)];
+        }
+
+        var wrappedDef = await dbContext.Set<FurnitureItem>().FirstOrDefaultAsync(x => x.Id == wrappedId);
         var openerPlayer = await dbContext.Set<Player>().FirstOrDefaultAsync(x => x.Id == client.Player.Id);
 
         if (wrappedDef == null || openerPlayer == null)

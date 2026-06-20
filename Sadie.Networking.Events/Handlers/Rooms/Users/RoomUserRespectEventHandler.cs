@@ -6,6 +6,7 @@ using Sadie.API.Networking.Events.Handlers;
 using Sadie.Db;
 using Sadie.Db.Models.Players;
 using Sadie.Enums.Game.Rooms.Users;
+using Sadie.Networking.Events.Achievements;
 using Sadie.Networking.Writers.Rooms.Users;
 using Sadie.Shared.Attributes;
 
@@ -64,5 +65,16 @@ public class RoomUserRespectEventHandler(
             UserId = roomUser.Player.Id,
             Action = (int) RoomUserAction.ThumbsUp
         });
+
+        // Achievements: the giver progresses RespectGiven, the receiver RespectEarned.
+        try
+        {
+            await AchievementService.AddProgressAsync(dbContextFactory, player, "RespectGiven", 1);
+            await AchievementService.AddProgressAsync(dbContextFactory, targetPlayer, "RespectEarned", 1);
+        }
+        catch
+        {
+            // never let an achievement failure break the respect action
+        }
     }
 }

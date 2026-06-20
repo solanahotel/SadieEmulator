@@ -1,8 +1,10 @@
+using Microsoft.EntityFrameworkCore;
 using Sadie.API;
 using Sadie.API.Game.Players;
 using Sadie.API.Networking;
 using Sadie.API.Networking.Client;
 using Sadie.API.Networking.Events.Handlers;
+using Sadie.Db;
 using Sadie.Networking.Events.Moderation;
 using Sadie.Networking.Events.Writers;
 using Sadie.Networking.Writers.Players;
@@ -29,7 +31,9 @@ internal static class ModBroadcast
 // Player submits a Call for Help (CALL_FOR_HELP = 1691). Wire: message, topicIndex, reportedUserId,
 // reportedRoomId, then the chat-evidence entries (which we don't need for the ticket itself).
 [PacketId(1691)]
-public class CallForHelpEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class CallForHelpEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public string Message { get; set; } = "";
     public int TopicIndex { get; set; }
@@ -47,6 +51,11 @@ public class CallForHelpEventHandler(IPlayerRepository playerRepository) : INetw
             ReportedUserId, reported?.Username ?? "",
             TopicIndex, Message, ReportedRoomId);
 
+        // Persist the report to the durable audit trail; keep its row id on the in-memory issue so
+        // the later pick / release / close actions update the same ticket.
+        issue.DbId = await CfhTicketLog.CreateAsync(
+            dbContextFactory, client.Player.Id, ReportedUserId, ReportedRoomId, TopicIndex, Message);
+
         await ModBroadcast.ToModeratorsAsync(playerRepository, new IssueInfoWriter { Issue = issue.ToIssueData() });
     }
 }
@@ -54,7 +63,9 @@ public class CallForHelpEventHandler(IPlayerRepository playerRepository) : INetw
 // Moderator picks an issue (PICK_ISSUES = 15). Wire: count, issueId(s), retryEnabled, retryCount, message.
 // The client always sends a single issue, so we read count + the first id.
 [PacketId(15)]
-public class PickIssuesEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class PickIssuesEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public int Count { get; set; }
     public int IssueId { get; set; }
@@ -80,13 +91,17 @@ public class PickIssuesEventHandler(IPlayerRepository playerRepository) : INetwo
         issue.PickerUserId = (int) client.Player.Id;
         issue.PickerUsername = client.Player.Username;
 
+        await CfhTicketLog.SetPickedAsync(dbContextFactory, issue.DbId, client.Player.Id);
+
         await ModBroadcast.ToModeratorsAsync(playerRepository, new IssueInfoWriter { Issue = issue.ToIssueData() });
     }
 }
 
 // Moderator resolves/closes an issue (CLOSE_ISSUES = 2067). Wire: resolutionType, count, issueId(s).
 [PacketId(2067)]
-public class CloseIssuesEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class CloseIssuesEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public int ResolutionType { get; set; }
     public int Count { get; set; }
@@ -96,6 +111,13 @@ public class CloseIssuesEventHandler(IPlayerRepository playerRepository) : INetw
     {
         if (client.Player == null || !client.Player.HasPermission("moderator")) return;
 
+        // Record how it was resolved (and by whom) before dropping it from the in-memory queue.
+        if (CfhIssueStore.TryGet(IssueId, out var issue))
+        {
+            await CfhTicketLog.SetClosedAsync(dbContextFactory, issue.DbId, client.Player.Id,
+                CfhTicketLog.MapResolution(ResolutionType));
+        }
+
         CfhIssueStore.Remove(IssueId);
 
         await ModBroadcast.ToModeratorsAsync(playerRepository, new IssueDeletedWriter { IssueId = IssueId });
@@ -104,7 +126,9 @@ public class CloseIssuesEventHandler(IPlayerRepository playerRepository) : INetw
 
 // Moderator releases a picked issue back to the open queue (RELEASE_ISSUES = 1572). Wire: count, issueId(s).
 [PacketId(1572)]
-public class ReleaseIssuesEventHandler(IPlayerRepository playerRepository) : INetworkPacketEventHandler
+public class ReleaseIssuesEventHandler(
+    IPlayerRepository playerRepository,
+    IDbContextFactory<SadieDbContext> dbContextFactory) : INetworkPacketEventHandler
 {
     public int Count { get; set; }
     public int IssueId { get; set; }
@@ -118,6 +142,8 @@ public class ReleaseIssuesEventHandler(IPlayerRepository playerRepository) : INe
         issue.State = 1;
         issue.PickerUserId = 0;
         issue.PickerUsername = "";
+
+        await CfhTicketLog.SetReleasedAsync(dbContextFactory, issue.DbId);
 
         await ModBroadcast.ToModeratorsAsync(playerRepository, new IssueInfoWriter { Issue = issue.ToIssueData() });
     }
